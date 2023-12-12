@@ -1,21 +1,23 @@
 ﻿using System.Text;
+using System.Text.RegularExpressions;
 using TestConsole;
 
 Print.Ascii("Code Cop!");
 Print.Code("var x = new { user: someName };");
-GptService gptService = new GptService();
+var gptService = new GptService();
+string repoPath = "https://github.com/dwcy/hotchocolate";
 
+await GitRepoFinder(repoPath);
 //string prompt = "var x = new { user: someName };";
 //await CallChatGpt(prompt);
 
-await GitRepoFinder();
-
 Console.ReadKey();
 
-async Task GitRepoFinder()
+async Task GitRepoFinder(string repoPath)
 {
     var gitRepoService = new GitRepoService();
-    string repoPath = "https://github.com/dwcy/hotchocolate";
+
+
     var isValidCSharpRepo = gitRepoService.InspectRepo(repoPath);
     if (isValidCSharpRepo)
     {
@@ -26,7 +28,7 @@ async Task GitRepoFinder()
 
         foreach (string filePath in ignoreGenerated)
         {
-            var cleanedFileName = filePath.Replace("C:\\Users\\dawid.parvulescu\\AppData\\Local\\Temp\\tempRepo\\", "");
+            var cleanedFileName = Regex.Replace(filePath, @".*\\(.*)\\", "");
             Print.Normal($"Processing: {cleanedFileName}");
             var code = GetFileContentAsString(filePath);
 
