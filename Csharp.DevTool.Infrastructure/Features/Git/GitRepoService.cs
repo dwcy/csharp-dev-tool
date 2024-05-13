@@ -38,7 +38,11 @@ public class GitRepoService
         {
             repo = new Repository(workDir);
             if (repo != null)
+            {
                 Print.Normal($"Found cached repo : {workDir}");
+                //todo git fetch
+            }
+
         }
         catch (RepositoryNotFoundException)
         {

@@ -1,25 +1,41 @@
-﻿using Microsoft.Extensions.Configuration;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
+﻿using Dumpify;
+using Microsoft.Extensions.Configuration;
 using System.Text;
+using System.Text.Json;
 
 namespace TestConsole;
 
 public class GptService
 {
+    const string apiUrl = "https://api.openai.com/v1/chat/completions";
+
+    private static readonly JsonSerializerOptions CamelCaseSerializerOptions = new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+    };
     readonly IConfiguration config;
     public GptService()
     {
         config = new ConfigurationBuilder()
               .SetBasePath(Directory.GetCurrentDirectory())
-              .AddJsonFile("appsettings.json")
+              .AddJsonFile("appsettings.development.json")
               .Build();
     }
+
+    public async Task CallFunctionApi(string prompt, Properties properties, string functionName, string description)
+    {
+        var gptRequest = new GptRequestModel(config, prompt, properties, functionName, description);
+        gptRequest.Dump();
+        await SendRequest(gptRequest);
+    }
+
     public async Task CallApi(List<string> prompts)
     {
         var gptRequest = new GptRequestModel(config, prompts);
         await SendRequest(gptRequest);
     }
+
     public async Task CallApi(string prompt)
     {
         var gptRequest = new GptRequestModel(config, prompt);
@@ -32,11 +48,6 @@ public class GptService
         {
             var response = await GetOpenAIResponse(request);
             var result = ProcessGptResponse(response);
-            Print.Info("ChatGPT's response: ");
-            foreach (var item in result)
-            {
-                Print.Code(item);
-            }
         }
         catch (Exception ex)
         {
@@ -49,8 +60,8 @@ public class GptService
         if (response == null)
             throw new Exception("No content");
 
-        dynamic json = JsonConvert.DeserializeObject(response);
-        foreach (var item in json.choices)
+        var result = JsonSerializer.Deserialize<dynamic>(response, CamelCaseSerializerOptions);
+        foreach (var item in result.choices)
         {
             yield return item.message.content;
         }
@@ -62,12 +73,7 @@ public class GptService
 
         using (HttpClient client = new HttpClient())
         {
-            string apiUrl = "https://api.openai.com/v1/chat/completions";
-
-            string requestJson = JsonConvert.SerializeObject(request, new JsonSerializerSettings
-            {
-                ContractResolver = new CamelCasePropertyNamesContractResolver()
-            });
+            string requestJson = JsonSerializer.Serialize(request, CamelCaseSerializerOptions);
 
             // Set up the HTTP request
             var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
@@ -79,15 +85,17 @@ public class GptService
             // Handle the response
             if (response.IsSuccessStatusCode)
             {
-                return await response.Content.ReadAsStringAsync();
+                var result = await response.Content.ReadAsStringAsync();
+                result.Dump();
+                return result;
             }
             else
             {
                 Print.Error($"Failed to get response. Status code: {response.StatusCode}");
-                Print.Normal(await response.Content.ReadAsStringAsync());
+                var error = await response.Content.ReadAsStringAsync();
+                error.Dump();
+                return error;
             }
-
-            return string.Empty;
         }
     }
 }
